@@ -4,12 +4,27 @@ set -x
 
 NCPU=4
 export BUILDDIR=`pwd`
-export GLIB_PATH=$BUILDDIR/../../glib/build/android
+#export GLIB_PATH=$BUILDDIR/../../glib/build/android
+export GLIB_PATH=$BUILDDIR/glib/build/android
+
+[ -e $GLIB_PATH/lib/libglib-2.0.so ] || {
+	[ -e glib ] || git clone --depth 1 git://git.gnome.org/glib || exit 1
+	cd glib
+
+	curl --location https://bugzilla.gnome.org/attachment.cgi?id=257308 > glib-android.patch || exit 1
+	git apply glib-android.patch || exit 1
+
+	cd build/android
+	./build.sh || exit 1
+
+	cd $BUILDDIR
+}
+
 export PKG_CONFIG_PATH=$GLIB_PATH/lib/pkgconfig:$BUILDDIR/lib/pkgconfig
 
 if false; then
 [ -e lib/libaudiofile.so ] || {
-	[ -e audiofile ] || git clone https://github.com/mpruett/audiofile.git
+	[ -e audiofile ] || git clone --depth 1 https://github.com/mpruett/audiofile.git
 	cd audiofile
 
 	env BUILD_EXECUTABLE=1 \
@@ -24,7 +39,6 @@ if false; then
 
 
 	cd $BUILDDIR
-	exit 0
 }
 fi
 
@@ -127,7 +141,7 @@ fi
 }
 
 [ -e lib/libssl.a ] || {
-	[ -e openssl/jni ] || git clone git://github.com/fries/android-external-openssl.git openssl/jni || exit 1
+	[ -e openssl/jni ] || git clone --depth 1 git://github.com/fries/android-external-openssl.git openssl/jni || exit 1
 	rm -f openssl/jni/Application.mk
 	echo APP_MODULES := libcrypto-static libssl-static > openssl/jni/Application.mk
 	echo APP_ABI := armeabi >> openssl/jni/Application.mk
@@ -238,6 +252,7 @@ fi
 	cp -f -a zzip/jni/include/* include/
 }
 
+if false; then
 [ -e lib/libid3.a ] || {
 	[ -e id3lib-3.8.3 ] || curl --location http://sourceforge.net/projects/id3lib/files/id3lib/3.8.3/id3lib-3.8.3.tar.gz/download | tar xz || exit 1
 	cd id3lib-3.8.3
@@ -261,6 +276,7 @@ fi
 
 	cd $BUILDDIR
 }
+fi
 
 [ -e lib/libid3tag.so ] || {
 	[ -e libid3tag-0.15.1b ] || curl --location http://sourceforge.net/projects/mad/files/libid3tag/0.15.1b/libid3tag-0.15.1b.tar.gz/download | tar xz || exit 1
@@ -299,11 +315,14 @@ fi
 	[ -e libsamplerate-0.1.8 ] || curl --location http://www.mega-nerd.com/SRC/libsamplerate-0.1.8.tar.gz | tar xz || exit 1
 	cd libsamplerate-0.1.8
 
+	# Compiled and stripped library takes up 1.5Mb, so we'll disable huge coeff tables
 	cp -f /usr/share/automake-*/config.* Cfg/
 
 	[ -e Makefile ] || \
 		env BUILD_EXECUTABLE=1 \
-		CFLAGS="-I$BUILDDIR/include -I." \
+		CFLAGS="-I$BUILDDIR/include -I. \
+		-Dslow_high_qual_coeffs=fastest_coeffs \
+		-Dslow_mid_qual_coeffs=fastest_coeffs" \
 		LDFLAGS="-L$BUILDDIR/lib" \
 		../setCrossEnvironment.sh \
 		./autogen.sh \
@@ -312,6 +331,8 @@ fi
 		|| exit 1
 
 	echo all install: > examples/Makefile
+	echo > src/high_qual_coeffs.h
+	echo > src/mid_qual_coeffs.h
 
 	../setCrossEnvironment.sh \
 		make -j$NCPU install \
@@ -427,11 +448,11 @@ fi
 }
 
 [ -e lib/libglob.a ] || {
-	[ -e TokyoCabinet ] || git clone https://github.com/white-gecko/TokyoCabinet.git || exit 1
+	[ -e TokyoCabinet ] || git clone --depth 1 https://github.com/white-gecko/TokyoCabinet.git || exit 1
 	cd TokyoCabinet
 	env BUILD_EXECUTABLE=1 \
 		../setCrossEnvironment.sh \
-		sh -c '$CC $CFLAGS glob.c -shared -I. -o glob.o $LDFLAGS && ar rcs ../lib/libglob.a glob.o && cp -f glob.h ../include/' || exit 1
+		sh -c '$CC $CFLAGS -I. -c glob.c -o glob.o $LDFLAGS && ar rcs ../lib/libglob.a glob.o && cp -f glob.h ../include/' || exit 1
 	cd $BUILDDIR
 }
 
@@ -516,9 +537,9 @@ fi
 		--enable-id3             \
 		--enable-lsr             \
 		--enable-wave-encoder    \
-		--enable-vorbis-encoder  \
 		--enable-sqlite          \
-		--with-zeroconf=avahi    \
+		--with-zeroconf=no       \
+		--disable-vorbis-encoder \
 		--disable-audiofile      \
 		--disable-shout          \
 		--disable-adplug         \
@@ -568,3 +589,45 @@ fi
 	make -j$NCPU V=1 &&
 	make -j$NCPU install \
 	|| exit 1
+
+#Generated with ndk-depends
+DEPS="
+libzzip.so
+libvorbisfile.so.3
+libvorbis.so.0
+libsqlite3.so.0
+libsndfile.so.1
+libsamplerate.so.0
+libogg.so.0
+libintl.so.8
+libid3tag.so
+libgthread-2.0.so.0
+libglib-2.0.so.0
+libfaad.so.2
+libcurl.so.5
+libavformat.so
+libavcodec.so
+libavutil.so
+libFLAC.so.8
+libffi.so.6
+libiconv.so.2
+"
+
+#libavahi-glib.so.1
+#libavahi-common.so.3
+#libavahi-client.so.3
+#libdbus-1.so.3
+
+rm -rf dist
+mkdir -p dist
+
+cp -f bin/mpd mpd.conf mpd-test.sh dist/
+
+for f in $DEPS; do
+	cp -f $GLIB_PATH/lib/$f dist/
+	cp -f lib/$f dist/
+	chmod a+x dist/$f
+done
+
+./setCrossEnvironment.sh \
+	sh -c '$STRIP --strip-unneeded dist/*'

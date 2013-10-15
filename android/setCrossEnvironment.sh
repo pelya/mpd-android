@@ -59,7 +59,7 @@ LDFLAGS="\
 $SHARED \
 --sysroot=$NDK/platforms/$PLATFORMVER/arch-arm \
 -L$NDK/platforms/$PLATFORMVER/arch-arm/usr/lib \
--lc -lm -lGLESv1_CM -ldl -llog -lz \
+-lc -lm -ldl -lz \
 -L$NDK/sources/cxx-stl/gnu-libstdc++/$GCCVER/libs/$ARCH \
 -lgnustl_static \
 -no-canonical-prefixes $UNRESOLVED -Wl,-z,noexecstack -Wl,-z,relro -Wl,-z,now \
