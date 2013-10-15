@@ -222,7 +222,7 @@ HttpdClient::CancelQueue()
 		CancelWrite();
 }
 
-ssize_t
+SocketMonitor::ssize_t
 HttpdClient::TryWritePage(const Page &page, size_t position)
 {
 	assert(position < page.size);
@@ -230,7 +230,7 @@ HttpdClient::TryWritePage(const Page &page, size_t position)
 	return Write(page.data + position, page.size - position);
 }
 
-ssize_t
+SocketMonitor::ssize_t
 HttpdClient::TryWritePageN(const Page &page, size_t position, ssize_t n)
 {
 	return n >= 0
@@ -238,7 +238,7 @@ HttpdClient::TryWritePageN(const Page &page, size_t position, ssize_t n)
 		: TryWritePage(page, position);
 }
 
-ssize_t
+SocketMonitor::ssize_t
 HttpdClient::GetBytesTillMetaData() const
 {
 	if (metadata_requested &&
